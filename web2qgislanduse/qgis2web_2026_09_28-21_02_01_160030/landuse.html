@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="./resources/ol.css">
+        <link rel="stylesheet" href="resources/fontawesome-all.min.css">
+        <link href="resources/photon-geocoder-autocomplete.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
+        <link rel="stylesheet" href="./resources/qgis2web.css">
+        <style>
+        html, body {
+            background-color: #ffffff;
+        }
+        .ol-control > * {
+            background-color: #f8f8f8!important;
+            color: #444444!important;
+            border-radius: 0px;
+        }
+        .ol-attribution a, .gcd-gl-input::placeholder, .search-layer-input-search::placeholder {
+            color: #444444!important;
+        }
+        .search-layer-input-search {
+            background-color: #f8f8f8!important;
+        }
+        .ol-control > *:focus, .ol-control >*:hover {
+            background-color: rgba(248, 248, 248, 0.7)!important;
+        } 
+        .ol-control {
+            background-color: rgba(255,255,255,.4) !important;
+            padding: 2px !important;
+        } 
+        </style>
+
+        <style>
+        #map {
+            width: 920px;
+            height: 588px;
+        }
+        </style>
+<style>
+        .landuse-legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background-color: rgba(11, 19, 43, 0.95);
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            border: 1px solid #3a506b;
+            font-family: sans-serif;
+            z-index: 1000;
+        }
+        .landuse-legend i {
+            width: 10px;
+            height: 10px;
+            display: inline-block;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        </style>
+    </head>
+    <body>
+        <div id="map">
+            <div id="popup" class="ol-popup">
+                <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+                <div id="popup-content"></div>
+            </div>
+        </div>
+        <script src="resources/qgis2web_expressions.js"></script>
+        <script src="./resources/functions.js"></script>
+        <script src="./resources/ol.js"></script>
+        <script src="./resources/ol-layerswitcher.js"></script>
+        <script src="resources/photon-geocoder-autocomplete.min.js"></script>
+        <script src="resources/olms.js"></script>
+        <script src="./layers/layers.js" type="text/javascript"></script> 
+        <script src="./resources/Autolinker.min.js"></script>
+        <script src="./resources/qgis2web.js"></script>
+        <script>
+        // Cipta elemen kotak legenda
+        var legendDiv = document.createElement('div');
+        legendDiv.className = 'landuse-legend';
+        legendDiv.innerHTML = `
+            <b style="color:#48cae4; display:block; margin-bottom:5px;">Land Use Classification</b>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px;">
+                <div><i style="background:#1f77b4;"></i> Water</div>
+                <div><i style="background:#2ca02c;"></i> Trees</div>
+                <div><i style="background:#98df8a;"></i> Flooded Veg</div>
+                <div><i style="background:#ffbb78;"></i> Crops</div>
+                <div><i style="background:#d62728;"></i> Built Area</div>
+                <div><i style="background:#f7f7f7; border:1px solid #333;"></i> Bare Ground</div>
+                <div><i style="background:#e377c2;"></i> Snow/Ice</div>
+                <div><i style="background:#c7c7c7;"></i> Clouds</div>
+                <div><i style="background:#dbdb8d;"></i> Rangeland</div>
+            </div>
+        `;
+        // Masukkan legenda ke dalam paparan peta
+        document.getElementById('map').appendChild(legendDiv);
+        </script>
+    </body>
+</html>

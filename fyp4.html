@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Pemetaan Risiko Banjir Interaktif (WebGIS)</title>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b132b;
+            --panel-bg: rgba(28, 37, 65, 0.85);
+            --accent-blue: #48cae4;
+            --alert-red: #ff4d6d;
+            --alert-yellow: #ffb703;
+            --safe-green: #06d6a0;
+            --text-light: #f8fafc;
+            --text-muted: #cbd5e1;
+            --border-color: #3a506b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            line-height: 1.6;
+            position: relative;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .page-video-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: -2;
+            opacity: 0.65;
+            filter: brightness(1.05) contrast(1.15) saturate(1.4);
+            pointer-events: none;
+        }
+
+        .page-bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(180deg, rgba(11, 19, 43, 0.35) 0%, rgba(11, 19, 43, 0.75) 100%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        header {
+            background-color: rgba(28, 37, 65, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 3%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .brand {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 20px;
+        }
+
+        nav ul li a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: 0.3s;
+        }
+
+        nav ul li a:hover {
+            color: var(--accent-blue);
+        }
+
+        .hero {
+            position: relative;
+            padding: 110px 3% 30px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .hero h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            background: linear-gradient(90deg, #ffffff, var(--accent-blue), #90e0ef);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+
+        .hero p {
+            color: #ffffff;
+            font-size: 1.05rem;
+            width: 100%;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+
+        .container-full {
+            width: 100%;
+            padding: 15px 3%;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 18px;
+            background-color: var(--accent-blue);
+            border-radius: 2px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+            width: 100%;
+        }
+
+        .stat-card {
+            background-color: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-card .value {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+            width: 100%;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background-color: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            width: 100%;
+        }
+
+        #map {
+            height: 580px;
+            width: 100%;
+            border-radius: 8px;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
+
+        .team-card {
+            background-color: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .team-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #3a506b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin: 0 auto 12px;
+        }
+
+        .tab-btn.active {
+            border-bottom: 2px solid var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        footer {
+            position: relative;
+            z-index: 10;
+            background-color: rgba(11, 19, 43, 0.85);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border-color);
+            padding: 20px 3%;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 30px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <video class="page-video-bg" autoplay loop muted playsinline webkit-playsinline preload="auto">
+        <source src="background1.mp4" type="video/mp4">
+        <source src="background1.mp4.mp4" type="video/mp4">
+    </video>
+    <div class="page-bg-overlay"></div>
+
+    <header>
+        <div class="brand">
+            <span>🌊</span> WebGIS Pemetaan Banjir
+        </div>
+        <nav>
+            <ul>
+                <li><a href="#overview" data-i18n="nav_home">Utama</a></li>
+                <li><a href="#map-section" data-i18n="nav_map">Peta Risiko</a></li>
+                <li><a href="#analytics-section" data-i18n="nav_analytics">Analisis Hujan</a></li>
+                <li><a href="#factors" data-i18n="nav_factors">Parameter Spasial</a></li>
+                <li><a href="#team" data-i18n="nav_team">Pasukan</a></li>
+            </ul>
+            <!-- Language Selector Dropdown -->
+            <div class="flex items-center gap-1 bg-[#0b132b] border border-[#3a506b] rounded-lg px-2 py-1 text-xs">
+                <span class="text-sm">🌐</span>
+                <select id="langSelect" onchange="changeLanguage(this.value)" class="bg-transparent text-white focus:outline-none cursor-pointer">
+                    <option value="ms" selected class="bg-[#0b132b] text-white">Bahasa Melayu</option>
+                    <option value="en" class="bg-[#0b132b] text-white">English</option>
+                </select>
+            </div>
+        </nav>
+    </header>
+
+    <div class="hero" id="overview">
+        <div class="hero-content">
+            <h1 data-i18n="hero_title">Pembangunan Sistem Pemetaan Risiko Banjir Interaktif Menggunakan WebGIS</h1>
+            <p data-i18n="hero_sub">Sistem Pemetaan Risiko Banjir Berasaskan GIS Interaktif untuk Pemantauan Hujan & Penilaian Spasial Kawasan Berisiko di Ipoh, Perak</p>
+        </div>
+    </div>
+
+    <div class="container-full">
+        
+        <div class="stats-grid">
+            <div class="stat-card border-l-4 border-cyan-400">
+                <div class="label" data-i18n="stat_live_weather">⚡ Status Cuaca Semasa</div>
+                <div id="weatherCondition" class="value text-cyan-300 text-lg my-1">Memuatkan...</div>
+                <div id="weatherSub" class="text-xs text-gray-300">-- °C • Angin: -- km/j</div>
+            </div>
+            
+            <div class="stat-card border-l-4 border-blue-400">
+                <div class="label" id="lblSelectedMonth">Purata Taburan Hujan</div>
+                <div id="valRainfall" class="value text-blue-400">0.0 mm</div>
+                <div id="subRainfall" class="text-xs text-gray-300">Kadar: --</div>
+            </div>
+
+            <div class="stat-card border-l-4 border-amber-400">
+                <div class="label" data-i18n="stat_rainy_days">Hari Hujan</div>
+                <div id="valRainDays" class="value text-amber-400">0 Hari</div>
+                <div id="subMonsoon" class="text-xs text-gray-300">--</div>
+            </div>
+
+            <div class="stat-card border-l-4 border-purple-400">
+                <div class="label" data-i18n="stat_alert_level">Tahap Amaran Banjir</div>
+                <div id="valAlertStatus" class="value text-purple-300">SEDERHANA</div>
+                <div id="subAlertDesc" class="text-xs text-gray-300">Kesiapsiagaan Normal</div>
+            </div>
+
+            <div class="stat-card border-l-4 border-rose-500">
+                <div class="label" data-i18n="stat_active_areas">Kawasan Aktif Dipaparkan</div>
+                <div id="valActiveLocs" class="value text-rose-500">0 / 14</div>
+                <div class="text-xs text-gray-300" data-i18n="stat_reg_locations">Lokasi Berdaftar</div>
+            </div>
+        </div>
+
+        <h2 class="section-title" id="map-section" data-i18n="title_map_section">Pemetaan Risiko Banjir Interaktif</h2>
+        <div class="dashboard-layout">
+            
+            <!-- Dynamic Control Panel / Description Panel -->
+            <div class="panel flex flex-col justify-between" id="sidePanelContainer">
+                
+                <!-- 1. Default Control Panel (Flood Risk Map) -->
+                <div id="panel-controls">
+                    <h3 class="text-base font-semibold text-white mb-4 pb-2 border-b border-gray-700 flex items-center gap-2" data-i18n="panel_title">
+                        ⚙️ Panel Kawalan
+                    </h3>
+
+                    <!-- Search Location Filter -->
+                    <div class="mb-4">
+                        <label class="block text-xs uppercase tracking-wider text-gray-300 font-semibold mb-2" data-i18n="lbl_search">
+                            🔍 Cari Lokasi:
+                        </label>
+                        <input type="text" id="searchInput" onkeyup="updateDashboard()" placeholder="Cth. Manjoi, Botani..." class="w-full bg-[#0b132b] text-white border border-[#3a506b] rounded-lg p-2.5 text-xs focus:outline-none focus:border-cyan-400">
+                    </div>
+
+                    <!-- Select Year -->
+                    <div class="mb-4">
+                        <label class="block text-xs uppercase tracking-wider text-gray-300 font-semibold mb-2" data-i18n="lbl_year">
+                            🗓️ Pilih Tahun (2016 - 2026):
+                        </label>
+                        <select id="yearSelect" onchange="updateDashboard()" class="w-full bg-[#0b132b] text-white border border-[#3a506b] rounded-lg p-2.5 text-xs focus:outline-none focus:border-cyan-400">
+                        </select>
+                    </div>
+
+                    <!-- Select Month -->
+                    <div class="mb-6">
+                        <label class="block text-xs uppercase tracking-wider text-gray-300 font-semibold mb-2" data-i18n="lbl_month">
+                            📅 Pilih Bulan Analisis:
+                        </label>
+                        <select id="monthSelect" onchange="updateDashboard()" class="w-full bg-[#0b132b] text-white border border-[#3a506b] rounded-lg p-2.5 text-xs focus:outline-none focus:border-cyan-400">
+                        </select>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-xs uppercase tracking-wider text-gray-300 font-semibold mb-3" data-i18n="lbl_hazard_filter">
+                            🎯 Tapis Tahap Risiko Hazard:
+                        </label>
+                        <div class="space-y-3 text-xs">
+                            <label class="flex items-center gap-2.5 cursor-pointer hover:text-cyan-300 transition">
+                                <input type="checkbox" class="risk-checkbox accent-red-500 w-4 h-4 rounded" value="high risk" checked onchange="updateDashboard()">
+                                <span class="text-gray-200" data-i18n="risk_high">Risiko Tinggi</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 cursor-pointer hover:text-cyan-300 transition">
+                                <input type="checkbox" class="risk-checkbox accent-amber-500 w-4 h-4 rounded" value="risk" checked onchange="updateDashboard()">
+                                <span class="text-gray-200" data-i18n="risk_risk">Berisiko</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 cursor-pointer hover:text-cyan-300 transition">
+                                <input type="checkbox" class="risk-checkbox accent-sky-400 w-4 h-4 rounded" value="moderate risk" checked onchange="updateDashboard()">
+                                <span class="text-gray-200" data-i18n="risk_moderate">Risiko Sederhana</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 cursor-pointer hover:text-cyan-300 transition">
+                                <input type="checkbox" class="risk-checkbox accent-emerald-400 w-4 h-4 rounded" value="low risk" checked onchange="updateDashboard()">
+                                <span class="text-gray-200" data-i18n="risk_low">Risiko Rendah</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Slope Map Panel Description -->
+                <div id="panel-desc-slope" class="hidden text-xs text-gray-300 space-y-3">
+                    <h3 class="text-base font-semibold text-cyan-300 mb-2 pb-2 border-b border-gray-700 flex items-center gap-2" data-i18n="slope_title">
+                        ⛰️ Analisis Spasial: Peta Kecerunan
+                    </h3>
+                    <p class="leading-relaxed text-gray-300" data-i18n="slope_desc">
+                        Peta Kecerunan memvisualisasikan kadar kecuraman permukaan topografi di Ipoh yang dihitung daripada Model Elevasi Digital (DEM). Parameter kecerunan sangat penting dalam menentukan halaju limpasan permukaan dan potensi pengumpulan air.
+                    </p>
+                    <div class="bg-[#0b132b]/80 p-3 rounded-lg border border-[#3a506b] space-y-2">
+                        <span class="font-semibold text-white block" data-i18n="slope_zone_title">📌 Zonasi & Kesan Hidrologi:</span>
+                        <ul class="list-disc pl-4 space-y-1.5 text-gray-300">
+                            <li><strong class="text-emerald-400" data-i18n="slope_flat">Tanah Pamah / Landai (0° - 2°):</strong> <span data-i18n="slope_flat_desc">Halaju limpasan sangat rendah, membawa kepada pengumpulan air tinggi dan zon takungan banjir utama.</span></li>
+                            <li><strong class="text-amber-400" data-i18n="slope_moderate">Sederhana (2° - 15°):</strong> <span data-i18n="slope_mod_desc">Zon peralihan limpasan dengan kelajuan aliran permukaan yang stabil.</span></li>
+                            <li><strong class="text-rose-400" data-i18n="slope_steep">Curam (> 15°):</strong> <span data-i18n="slope_steep_desc">Mendorong aliran air permukaan yang pantas ke kawasan rendah serta meningkatkan risiko kegagalan cerun / tanah runtuh ketika hujan lebat.</span></li>
+                        </ul>
+                    </div>
+                    <div class="p-2.5 bg-cyan-950/40 border border-cyan-800/50 rounded-lg text-[11px] text-cyan-200" data-i18n="slope_app">
+                        💡 <strong>Aplikasi Geospatial:</strong> Digunakan bersama parameter hidrologi dalam Analisis Keputusan Pelbagai Kriteria (MCDA) untuk pemetaan risiko banjir kilat.
+                    </div>
+                </div>
+
+                <!-- 3. Elevation Map Panel Description -->
+                <div id="panel-desc-elevation" class="hidden text-xs text-gray-300 space-y-3">
+                    <h3 class="text-base font-semibold text-cyan-300 mb-2 pb-2 border-b border-gray-700 flex items-center gap-2" data-i18n="elev_title">
+                        🏔️ Analisis Spasial: Peta Elevasi
+                    </h3>
+                    <p class="leading-relaxed text-gray-300" data-i18n="elev_desc">
+                        Peta Elevasi menggambarkan variasi ketinggian mutlak tanah merentasi bandar Ipoh. Ketinggian (elevasi) adalah kritikal kerana air bergerak mengikut graviti dari kawasan tinggi ke kawasan terendah.
+                    </p>
+                    <div class="bg-[#0b132b]/80 p-3 rounded-lg border border-[#3a506b] space-y-2">
+                        <span class="font-semibold text-white block" data-i18n="elev_zone_title">📌 Zonasi Ketinggian:</span>
+                        <ul class="list-disc pl-4 space-y-1.5 text-gray-300">
+                            <li><strong class="text-rose-400" data-i18n="elev_low">Elevasi Rendah (< 20m):</strong> <span data-i18n="elev_low_desc">Zon risiko paling kritikal yang kerap mengalami limpahan sungai dan takungan banjir monsun.</span></li>
+                            <li><strong class="text-amber-300" data-i18n="elev_mod">Elevasi Sederhana (20m - 100m):</strong> <span data-i18n="elev_mod_desc">Zon pamah berbukit dengan risiko banjir tempatan bergantung pada kapasiti perparitan.</span></li>
+                            <li><strong class="text-emerald-400" data-i18n="elev_high">Elevasi Tinggi (> 100m):</strong> <span data-i18n="elev_high_desc">Zon tanah tinggi dan bukit batu kapur yang berfungsi sebagai kawasan tadahan air utama.</span></li>
+                        </ul>
+                    </div>
+                    <div class="p-2.5 bg-cyan-950/40 border border-cyan-800/50 rounded-lg text-[11px] text-cyan-200" data-i18n="elev_app">
+                        💡 <strong>Aplikasi Geospatial:</strong> Membantu simulasi kenaikan aras air dan perancangan laluan evakuasi kecemasan.
+                    </div>
+                </div>
+
+                <!-- 4. Boundary Map Panel Description -->
+                <div id="panel-desc-boundary" class="hidden text-xs text-gray-300 space-y-3">
+                    <h3 class="text-base font-semibold text-cyan-300 mb-2 pb-2 border-b border-gray-700 flex items-center gap-2" data-i18n="bound_title">
+                        🗺️ Analisis Spasial: Peta Sempadan
+                    </h3>
+                    <p class="leading-relaxed text-gray-300" data-i18n="bound_desc">
+                        Peta Sempadan memaparkan pembahagian pentadbiran daerah, mukim, serta zon perancangan bandar di Ipoh, mengintegrasikan data vektor sempadan untuk pemetaan risiko yang berstruktur.
+                    </p>
+                    <div class="bg-[#0b132b]/80 p-3 rounded-lg border border-[#3a506b] space-y-2">
+                        <span class="font-semibold text-white block" data-i18n="bound_importance_title">📌 Kepentingan Data Sempadan:</span>
+                        <ul class="list-disc pl-4 space-y-1.5 text-gray-300">
+                            <li><strong class="text-cyan-300" data-i18n="bound_admin">Sempadan Pentadbiran:</strong> <span data-i18n="bound_admin_desc">Membantu pihak berkuasa tempatan dan Majlis Bandaraya Ipoh (MBI) dalam pengurusan zon bencana.</span></li>
+                            <li><strong class="text-amber-300" data-i18n="bound_pop">Zon Kepadatan Penduduk:</strong> <span data-i18n="bound_pop_desc">Menentukur tahap pendedahan penempatan penduduk seperti Gugusan Manjoi dan Buntong.</span></li>
+                            <li><strong class="text-emerald-300" data-i18n="bound_basin">Zon Lembangan Sungai:</strong> <span data-i18n="bound_basin_desc">Memudahkan penyelarasan mitigasi banjir mengikut sempadan lembangan hidrologi.</span></li>
+                        </ul>
+                    </div>
+                    <div class="p-2.5 bg-cyan-950/40 border border-cyan-800/50 rounded-lg text-[11px] text-cyan-200" data-i18n="bound_app">
+                        💡 <strong>Aplikasi Geospatial:</strong> Penting untuk perancangan guna tanah bandar dan pengagihan sumber Pusat Pemindahan Sementara (PPS).
+                    </div>
+                </div>
+
+                <!-- 5. Land Use Map Panel Description -->
+                <div id="panel-desc-landuse" class="hidden text-xs text-gray-300 space-y-3">
+                    <h3 class="text-base font-semibold text-cyan-300 mb-2 pb-2 border-b border-gray-700 flex items-center gap-2" data-i18n="landuse_title">
+                        🌾 Analisis Spasial: Peta Guna Tanah / Liputan Tanah (LULC)
+                    </h3>
+                    <p class="leading-relaxed text-gray-300" data-i18n="landuse_desc">
+                        Peta Guna Tanah mengilustrasikan taburan kawasan bandar, tumbuh-tumbuhan, badan air, dan tanah terbiar di seluruh Ipoh. Ia mengenal pasti permukaan tidak telap air yang mempengaruhi kadar limpasan permukaan secara ketara.
+                    </p>
+                    <div class="bg-[#0b132b]/80 p-3 rounded-lg border border-[#3a506b] space-y-2">
+                        <span class="font-semibold text-white block" data-i18n="landuse_impact_title">📌 Kesan Hidrologi & Bandar:</span>
+                        <ul class="list-disc pl-4 space-y-1.5 text-gray-300">
+                            <li><strong class="text-rose-400" data-i18n="landuse_urban">Bandar / Pembangunan:</strong> <span data-i18n="landuse_urban_desc">Kadar ketelapan rendah yang menyebabkan pelepasan air ribut memuncak dengan pantas.</span></li>
+                            <li><strong class="text-emerald-400" data-i18n="landuse_veg">Tumbuh-tumbuhan / Hutan:</strong> <span data-i18n="landuse_veg_desc">Mendorong kapasiti resapan yang lebih tinggi dan limpasan permukaan yang lebih rendah.</span></li>
+                            <li><strong class="text-cyan-300" data-i18n="landuse_water">Badan Air:</strong> <span data-i18n="landuse_water_desc">Laluan saliran semula jadi dan zon takungan simpanan banjir.</span></li>
+                        </ul>
+                    </div>
+                    <div class="p-2.5 bg-cyan-950/40 border border-cyan-800/50 rounded-lg text-[11px] text-cyan-200" data-i18n="landuse_app">
+                        💡 <strong>Aplikasi Geospatial:</strong> Digunakan dalam Analisis Keputusan Pelbagai Kriteria (MCDA) untuk menilai kerentanan permukaan terhadap hujan lebat.
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="panel p-3 relative flex flex-col">
+                <!-- Map Navigation Buttons -->
+                <div class="flex space-x-2 mb-3 border-b border-gray-700 pb-2 overflow-x-auto w-full">
+                    <button onclick="switchMapTab('map1')" id="btnMap1" class="px-4 py-1.5 text-xs font-semibold rounded bg-cyan-500 text-white whitespace-nowrap" data-i18n="tab_map1">
+                        Peta Risiko Banjir ⚠️
+                    </button>
+                    <button onclick="switchMapTab('map2')" id="btnMap2" class="px-4 py-1.5 text-xs font-semibold rounded bg-[#0b132b] text-gray-300 hover:text-white whitespace-nowrap" data-i18n="tab_map2">
+                        Peta Kecerunan ⛰️
+                    </button>
+                    <button onclick="switchMapTab('map4')" id="btnMap4" class="px-4 py-1.5 text-xs font-semibold rounded bg-[#0b132b] text-gray-300 hover:text-white whitespace-nowrap" data-i18n="tab_map4">
+                        Peta Elevasi 🏔️
+                    </button>
+                    <button onclick="switchMapTab('map5')" id="btnMap5" class="px-4 py-1.5 text-xs font-semibold rounded bg-[#0b132b] text-gray-300 hover:text-white whitespace-nowrap" data-i18n="tab_map5">
+                        Peta Sempadan 🗺️
+                    </button>
+                    <button onclick="switchMapTab('map6')" id="btnMap6" class="px-4 py-1.5 text-xs font-semibold rounded bg-[#0b132b] text-gray-300 hover:text-white whitespace-nowrap" data-i18n="tab_map6">
+                        Peta Guna Tanah 🌾
+                    </button>
+                </div>
+
+                <!-- Map Containers -->
+                <div id="map-container-1" class="w-full flex-grow">
+                    <div id="map"></div>
+                </div>
+
+                <div id="map-container-2" class="hidden w-full flex-grow">
+                    <iframe 
+                        id="qgisIframeSlope"
+                        src="WEB2QGISLOPE\qgis2web_2026_09_28-00_03_22_312454\slope.html" 
+                        style="width: 100%; height: 580px; border-radius: 8px; border: none;">
+                    </iframe>
+                </div>
+
+                <div id="map-container-4" class="hidden w-full flex-grow">
+                    <iframe 
+                        id="qgisIframeElevation"
+                        src="qgis2webElevation\qgis2web_2026_09_26-23_07_34_005558\elevation.html" 
+                        style="width: 100%; height: 580px; border-radius: 8px; border: none;">
+                    </iframe>
+                </div>
+
+                <div id="map-container-5" class="hidden w-full flex-grow">
+                    <iframe 
+                        id="qgisIframeBoundary"
+                        src="web2qgisboundary\qgis2web_2026_09_27-10_59_20_492318\boundary.html" 
+                        style="width: 100%; height: 580px; border-radius: 8px; border: none;">
+                    </iframe>
+                </div>
+
+                <div id="map-container-6" class="hidden w-full flex-grow">
+                    <iframe 
+                        id="qgisIframeLanduse"
+                        src="web2qgislanduse\qgis2web_2026_09_28-21_02_01_160030\landuse.html" 
+                        style="width: 100%; height: 580px; border-radius: 8px; border: none;">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="section-title" id="analytics-section" data-i18n="title_analytics_section">Analisis Taburan Hujan & Grid Lokasi Hazard</h2>
+        <div class="panel mb-8">
+            <div class="flex border-b border-gray-700 space-x-6 text-sm font-medium mb-4">
+                <button onclick="switchTab('tab1')" id="btnTab1" class="tab-btn active pb-3 text-gray-300 hover:text-white transition" data-i18n="tab_rain_analytics">
+                    📊 Analisis Hujan Dinamik
+                </button>
+                <button onclick="switchTab('tab2')" id="btnTab2" class="tab-btn pb-3 text-gray-300 hover:text-white transition" data-i18n="tab_loc_grid">
+                    📍 Grid Lokasi & Koordinat Spasial
+                </button>
+            </div>
+
+            <div id="tab1" class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 w-full">
+                <div class="lg:col-span-2 bg-[#0b132b]/80 p-4 rounded-xl border border-[#3a506b]">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-semibold text-cyan-300"><span data-i18n="chart_title">Taburan Hujan Bulanan (mm)</span> - <span id="chartYearTitle">2026</span></h3>
+                        <span class="text-xs text-gray-400">Sumber: weather-and-climate.com</span>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="rainfallChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-[#0b132b]/80 p-4 rounded-xl border border-[#3a506b] overflow-y-auto max-h-72">
+                    <h3 class="text-sm font-semibold mb-3 text-cyan-300" data-i18n="table_monsoon_title">Fasa Musim Monsun</h3>
+                    <table class="w-full text-left text-xs text-gray-200">
+                        <thead class="uppercase border-b border-gray-700 text-gray-300">
+                            <tr>
+                                <th class="pb-2" data-i18n="th_month">Bulan</th>
+                                <th class="pb-2" data-i18n="th_rainfall">Hujan (mm)</th>
+                                <th class="pb-2" data-i18n="th_level">Tahap</th>
+                            </tr>
+                        </thead>
+                        <tbody id="seasonTableBody" class="divide-y divide-gray-800">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab2" class="hidden pt-2 w-full">
+                <div class="bg-[#0b132b]/80 p-4 rounded-xl border border-[#3a506b] overflow-x-auto">
+                    <h3 class="text-sm font-semibold mb-3 text-cyan-300" data-i18n="table_hazard_title">Data Lokasi Hazard Berdaftar</h3>
+                    <table class="w-full text-left text-xs text-gray-200">
+                        <thead class="uppercase border-b border-gray-700 text-gray-300">
+                            <tr>
+                                <th class="pb-3" data-i18n="th_area">Kawasan</th>
+                                <th class="pb-3" data-i18n="th_hazard">Tahap Hazard</th>
+                                <th class="pb-3">Easting</th>
+                                <th class="pb-3">Northing</th>
+                                <th class="pb-3">Latitud</th>
+                                <th class="pb-3">Longitud</th>
+                            </tr>
+                        </thead>
+                        <tbody id="locationTableBody" class="divide-y divide-gray-800">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4 border-t border-gray-700 w-full">
+                <button onclick="downloadCSV('rain')" class="w-full bg-[#0b132b] hover:bg-[#1c2541] border border-[#3a506b] text-white py-2.5 px-4 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition" data-i18n="btn_dl_rain">
+                    📥 Muat Turun Data Hujan (CSV)
+                </button>
+                <button onclick="downloadCSV('locations')" class="w-full bg-[#0b132b] hover:bg-[#1c2541] border border-[#3a506b] text-white py-2.5 px-4 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition" data-i18n="btn_dl_loc">
+                    📥 Muat Turun Data Lokasi Hazard (CSV)
+                </button>
+            </div>
+        </div>
+
+        <!-- GIS Spatial Analysis Parameters Section -->
+        <div class="w-full mb-8" id="factors">
+            <div class="panel">
+                <h3 class="text-white font-semibold flex items-center gap-2 mb-4 text-base" data-i18n="params_title">
+                    📐 Parameter Analisis Spasial GIS & Metodologi Analisis
+                </h3>
+                
+                <p class="text-xs text-[#cbd5e1] mb-6 leading-relaxed" data-i18n="params_intro">
+                    Sistem pemetaan risiko banjir ini menggunakan pendekatan <strong>Multi-Criteria Decision Analysis (MCDA)</strong> yang digabungkan bersama pemprosesan data geospasial bertingkat di dalam persekitaran GIS bagi mengenalpasti tahap kerentanan dan potensi genangan banjir di sekitar daerah Ipoh.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    
+                    <!-- Parameter 1 -->
+                    <div class="bg-[#0b132b]/80 p-5 rounded-xl border border-[#3a506b] flex flex-col justify-between">
+                        <div>
+                            <h4 class="text-sm font-semibold text-[#48cae4] mb-2 flex items-center gap-2" data-i18n="param1_title">
+                                <span>⛰️</span> Model Elevasi Digital (DEM) & Topografi
+                            </h4>
+                            <p class="text-xs text-[#cbd5e1] leading-relaxed mb-3" data-i18n="param1_desc">
+                                Ekstraksi data <strong>Shuttle Radar Topography Mission (SRTM) DEM</strong> diperhalusi untuk menghasilkan lapisan elevasi dan kecerunan (slope map). Parameter ini menilai kadar kecuraman muka bumi di mana kawasan tanah pamah (&lt; 20m) dan bergradien landai (0° - 2°) dikenal pasti sebagai zon penampungan limpasan utama yang berisiko tinggi mengalami limpahan banjir.
+                            </p>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-[#3a506b]/50 text-[11px] text-cyan-300/80 italic" data-i18n="param1_app">
+                            Aplikasi: Pemodelan aliran gravitasi & pengenalan zon tadahan takungan air.
+                        </div>
+                    </div>
+                    
+                    <!-- Parameter 2 -->
+                    <div class="bg-[#0b132b]/80 p-5 rounded-xl border border-[#3a506b] flex flex-col justify-between">
+                        <div>
+                            <h4 class="text-sm font-semibold text-[#48cae4] mb-2 flex items-center gap-2" data-i18n="param2_title">
+                                <span>🌧️</span> Rangkaian Hidrologi & Jarak Sungai
+                            </h4>
+                            <p class="text-xs text-[#cbd5e1] leading-relaxed mb-3" data-i18n="param2_desc">
+                                Pemodelan hidrologi melibatkan analisis <strong>Euclidean Distance Buffer</strong> terhadap sistem perairan utama seperti Sungai Kinta dan Sungai Pari. Penilaian diintegrasikan bersama reka bentuk taburan hujan bulanan & monsun untuk mengukur kadar limpahan tebing apabila luapan air melebihi kapasiti maksimum lembangan.
+                            </p>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-[#3a506b]/50 text-[11px] text-cyan-300/80 italic" data-i18n="param2_app">
+                            Aplikasi: Analisis zon penampan risiko ampuhan sungai & kadar kederasan limpasan.
+                        </div>
+                    </div>
+                    
+                    <!-- Parameter 3 -->
+                    <div class="bg-[#0b132b]/80 p-5 rounded-xl border border-[#3a506b] flex flex-col justify-between">
+                        <div>
+                            <h4 class="text-sm font-semibold text-[#48cae4] mb-2 flex items-center gap-2" data-i18n="param3_title">
+                                <span>🏢</span> Guna Tanah / Liputan Tanah (LULC) & Permukaan Kedap Air
+                            </h4>
+                            <p class="text-xs text-[#cbd5e1] leading-relaxed mb-3" data-i18n="param3_desc">
+                                Klasifikasi guna tanah memetakan tahap perbandaran, liputan permukaan tidak telap air, dan penempatan penduduk berkepadatan tinggi. Perubahan guna tanah mengurangkan kadar resapan air ke dalam tanah dan menguatkan koefisien limpasan permukaan, yang secara langsung meningkatkan frekuensi banjir kilat di bandar.
+                            </p>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-[#3a506b]/50 text-[11px] text-cyan-300/80 italic" data-i18n="param3_app">
+                            Aplikasi: Penilaian pendedahan aset/komuniti & kecekapan sistem perparitan bandar.
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+        <h2 class="section-title" id="team" data-i18n="title_team">Pasukan Projek</h2>
+        <div class="team-grid">
+            <div class="team-card">
+                <div class="team-avatar">👨‍💻</div>
+                <h3 class="text-white font-semibold">MUHAMMAD DANISH ASYRAAF BIN SAIFURAZURA</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem;" data-i18n="role_lead">Ketua Projek / Pembangun WebGIS</p>
+            </div>
+            <div class="team-card">
+                <div class="team-avatar">👨‍💻</div>
+                <h3 class="text-white font-semibold">MUHAMMAD FARIS DARWISY BIN FAHAIZUL ANUAR </h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem;" data-i18n="role_analyst">Penganalisis Spasial GIS</p>
+            </div>
+            <div class="team-card">
+                <div class="team-avatar">👨‍💻</div>
+                <h3 class="text-white font-semibold">MOHAMAD SYAFIQ BIN MOHD JUDDA</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem;" data-i18n="role_manager">Pengurus Data DEM & Hidrologi</p>
+            </div>
+        </div>
+
+    </div>
+
+    <footer>
+        <p data-i18n="footer_text">&copy; 2026 Sistem Pemetaan Risiko Banjir WebGIS. Hak Cipta Terpelihara.</p>
+    </footer>
+
+    <script>
+        const translations = {
+            ms: {
+                nav_home: "Utama",
+                nav_map: "Peta Risiko",
+                nav_analytics: "Analisis Hujan",
+                nav_factors: "Parameter Spasial",
+                nav_team: "Pasukan",
+                hero_title: "Pembangunan Sistem Pemetaan Risiko Banjir Interaktif Menggunakan WebGIS",
+                hero_sub: "Sistem Pemetaan Risiko Banjir Berasaskan GIS Interaktif untuk Pemantauan Hujan & Penilaian Spasial Kawasan Berisiko di Ipoh, Perak",
+                stat_live_weather: "⚡ Status Cuaca Semasa",
+                stat_rainy_days: "Hari Hujan",
+                stat_alert_level: "Tahap Amaran Banjir",
+                stat_active_areas: "Kawasan Aktif Dipaparkan",
+                stat_reg_locations: "Lokasi Berdaftar",
+                title_map_section: "Pemetaan Risiko Banjir Interaktif",
+                panel_title: "⚙️ Panel Kawalan",
+                lbl_search: "🔍 Cari Lokasi:",
+                lbl_year: "🗓️ Pilih Tahun (2016 - 2026):",
+                lbl_month: "📅 Pilih Bulan Analisis:",
+                lbl_hazard_filter: "🎯 Tapis Tahap Risiko Hazard:",
+                risk_high: "Risiko Tinggi",
+                risk_risk: "Berisiko",
+                risk_moderate: "Risiko Sederhana",
+                risk_low: "Risiko Rendah",
+                
+                slope_title: "⛰️ Analisis Spasial: Peta Kecerunan",
+                slope_desc: "Peta Kecerunan memvisualisasikan kadar kecuraman permukaan topografi di Ipoh yang dihitung daripada Model Elevasi Digital (DEM). Parameter kecerunan sangat penting dalam menentukan halaju limpasan permukaan dan potensi pengumpulan air.",
+                slope_zone_title: "📌 Zonasi & Kesan Hidrologi:",
+                slope_flat: "Tanah Pamah / Landai (0° - 2°):",
+                slope_flat_desc: "Halaju limpasan sangat rendah, membawa kepada pengumpulan air tinggi dan zon takungan banjir utama.",
+                slope_moderate: "Sederhana (2° - 15°):",
+                slope_mod_desc: "Zon peralihan limpasan dengan kelajuan aliran permukaan yang stabil.",
+                slope_steep: "Curam (> 15°):",
+                slope_steep_desc: "Mendorong aliran air permukaan yang pantas ke kawasan rendah serta meningkatkan risiko kegagalan cerun / tanah runtuh ketika hujan lebat.",
+                slope_app: "💡 <strong>Aplikasi Geospatial:</strong> Digunakan bersama parameter hidrologi dalam Analisis Keputusan Pelbagai Kriteria (MCDA) untuk pemetaan risiko banjir kilat.",
+
+                elev_title: "🏔️ Analisis Spasial: Peta Elevasi",
+                elev_desc: "Peta Elevasi menggambarkan variasi ketinggian mutlak tanah merentasi bandar Ipoh. Ketinggian (elevasi) adalah kritikal kerana air bergerak mengikut graviti dari kawasan tinggi ke kawasan terendah.",
+                elev_zone_title: "📌 Zonasi Ketinggian:",
+                elev_low: "Elevasi Rendah (< 20m):",
+                elev_low_desc: "Zon risiko paling kritikal yang kerap mengalami limpahan sungai dan takungan banjir monsun.",
+                elev_mod: "Elevasi Sederhana (20m - 100m):",
+                elev_mod_desc: "Zon pamah berbukit dengan risiko banjir tempatan bergantung pada kapasiti perparitan.",
+                elev_high: "Elevasi Tinggi (> 100m):",
+                elev_high_desc: "Zon tanah tinggi dan bukit batu kapur yang berfungsi sebagai kawasan tadahan air utama.",
+                elev_app: "💡 <strong>Aplikasi Geospatial:</strong> Membantu simulasi kenaikan aras air dan perancangan laluan evakuasi kecemasan.",
+
+                bound_title: "🗺️ Analisis Spasial: Peta Sempadan",
+                bound_desc: "Peta Sempadan memaparkan pembahagian pentadbiran daerah, mukim, serta zon perancangan bandar di Ipoh, mengintegrasikan data vektor sempadan untuk pemetaan risiko yang berstruktur.",
+                bound_importance_title: "📌 Kepentingan Data Sempadan:",
+                bound_admin: "Sempadan Pentadbiran:",
+                bound_admin_desc: "Membantu pihak berkuasa tempatan dan Majlis Bandaraya Ipoh (MBI) dalam pengurusan zon bencana.",
+                bound_pop: "Zon Kepadatan Penduduk:",
+                bound_pop_desc: "Menentukur tahap pendedahan penempatan penduduk seperti Gugusan Manjoi dan Buntong.",
+                bound_basin: "Zon Lembangan Sungai:",
+                bound_basin_desc: "Memudahkan penyelarasan mitigasi banjir mengikut sempadan lembangan hidrologi.",
+                bound_app: "💡 <strong>Aplikasi Geospatial:</strong> Penting untuk perancangan guna tanah bandar dan pengagihan sumber Pusat Pemindahan Sementara (PPS).",
+
+                landuse_title: "🌾 Analisis Spasial: Peta Guna Tanah / Liputan Tanah (LULC)",
+                landuse_desc: "Peta Guna Tanah mengilustrasikan taburan kawasan bandar, tumbuh-tumbuhan, badan air, dan tanah terbiar di seluruh Ipoh. Ia mengenal pasti permukaan tidak telap air yang mempengaruhi kadar limpasan permukaan secara ketara.",
+                landuse_impact_title: "📌 Kesan Hidrologi & Bandar:",
+                landuse_urban: "Bandar / Pembangunan:",
+                landuse_urban_desc: "Kadar ketelapan rendah yang menyebabkan pelepasan air ribut memuncak dengan pantas.",
+                landuse_veg: "Tumbuh-tumbuhan / Hutan:",
+                landuse_veg_desc: "Mendorong kapasiti resapan yang lebih tinggi dan limpasan permukaan yang lebih rendah.",
+                landuse_water: "Badan Air:",
+                landuse_water_desc: "Laluan saliran semula jadi dan zon takungan simpanan banjir.",
+                landuse_app: "💡 <strong>Aplikasi Geospatial:</strong> Digunakan dalam Analisis Keputusan Pelbagai Kriteria (MCDA) untuk menilai kerentanan permukaan terhadap hujan lebat.",
+
+                tab_map1: "Peta Risiko Banjir ⚠️",
+                tab_map2: "Peta Kecerunan ⛰️",
+                tab_map4: "Peta Elevasi 🏔️",
+                tab_map5: "Peta Sempadan 🗺️",
+                tab_map6: "Peta Guna Tanah 🌾",
+
+                title_analytics_section: "Analisis Taburan Hujan & Grid Lokasi Hazard",
+                tab_rain_analytics: "📊 Analisis Hujan Dinamik",
+                tab_loc_grid: "📍 Grid Lokasi & Koordinat Spasial",
+                chart_title: "Taburan Hujan Bulanan (mm)",
+                table_monsoon_title: "Fasa Musim Monsun",
+                th_month: "Bulan",
+                th_rainfall: "Hujan (mm)",
+                th_level: "Tahap",
+                table_hazard_title: "Data Lokasi Hazard Berdaftar",
+                th_area: "Kawasan",
+                th_hazard: "Tahap Hazard",
+                btn_dl_rain: "📥 Muat Turun Data Hujan (CSV)",
+                btn_dl_loc: "📥 Muat Turun Data Lokasi Hazard (CSV)",
+
+                params_title: "📐 Parameter Analisis Spasial GIS & Metodologi Analisis",
+                params_intro: "Sistem pemetaan risiko banjir ini menggunakan pendekatan <strong>Multi-Criteria Decision Analysis (MCDA)</strong> yang digabungkan bersama pemprosesan data geospasial bertingkat di dalam persekitaran GIS bagi mengenalpasti tahap kerentanan dan potensi genangan banjir di sekitar daerah Ipoh.",
+                param1_title: "⛰️ Model Elevasi Digital (DEM) & Topografi",
+                param1_desc: "Ekstraksi data <strong>Shuttle Radar Topography Mission (SRTM) DEM</strong> diperhalusi untuk menghasilkan lapisan elevasi dan kecerunan (slope map). Parameter ini menilai kadar kecuraman muka bumi di mana kawasan tanah pamah (< 20m) dan bergradien landai (0° - 2°) dikenal pasti sebagai zon penampungan limpasan utama yang berisiko tinggi mengalami limpahan banjir.",
+                param1_app: "Aplikasi: Pemodelan aliran gravitasi & pengenalan zon tadahan takungan air.",
+                param2_title: "🌧️ Rangkaian Hidrologi & Jarak Sungai",
+                param2_desc: "Pemodelan hidrologi melibatkan analisis <strong>Euclidean Distance Buffer</strong> terhadap sistem perairan utama seperti Sungai Kinta dan Sungai Pari. Penilaian diintegrasikan bersama reka bentuk taburan hujan bulanan & monsun untuk mengukur kadar limpahan tebing apabila luapan air melebihi kapasiti maksimum lembangan.",
+                param2_app: "Aplikasi: Analisis zon penampan risiko ampuhan sungai & kadar kederasan limpasan.",
+                param3_title: "🏢 Guna Tanah / Liputan Tanah (LULC) & Permukaan Kedap Air",
+                param3_desc: "Klasifikasi guna tanah memetakan tahap perbandaran, liputan permukaan tidak telap air, dan penempatan penduduk berkepadatan tinggi. Perubahan guna tanah mengurangkan kadar resapan air ke dalam tanah dan menguatkan koefisien limpasan permukaan, yang secara langsung meningkatkan frekuensi banjir kilat di bandar.",
+                param3_app: "Aplikasi: Penilaian pendedahan aset/komuniti & kecekapan sistem perparitan bandar.",
+
+                title_team: "Pasukan Projek",
+                role_lead: "Ketua Projek / Pembangun WebGIS",
+                role_analyst: "Penganalisis Spasial GIS",
+                role_manager: "Pengurus Data DEM & Hidrologi",
+                footer_text: "© 2026 Sistem Pemetaan Risiko Banjir WebGIS. Hak Cipta Terpelihara."
+            },
+            en: {
+                nav_home: "Home",
+                nav_map: "Risk Map",
+                nav_analytics: "Rainfall Analysis",
+                nav_factors: "Spatial Parameters",
+                nav_team: "Team",
+                hero_title: "Development of an Interactive Flood Risk Mapping System Using WebGIS",
+                hero_sub: "Interactive GIS-Based Flood Risk Mapping System for Rainfall Monitoring & Spatial Assessment of Vulnerable Areas in Ipoh, Perak",
+                stat_live_weather: "⚡ Live Weather Status",
+                stat_rainy_days: "Rainy Days",
+                stat_alert_level: "Flood Alert Level",
+                stat_active_areas: "Active Displayed Areas",
+                stat_reg_locations: "Registered Locations",
+                title_map_section: "Interactive Flood Risk Mapping",
+                panel_title: "⚙️ Control Panel",
+                lbl_search: "🔍 Search Location:",
+                lbl_year: "🗓️ Select Year (2016 - 2026):",
+                lbl_month: "📅 Select Analysis Month:",
+                lbl_hazard_filter: "🎯 Hazard Risk Level Filter:",
+                risk_high: "High Risk",
+                risk_risk: "Risk",
+                risk_moderate: "Moderate Risk",
+                risk_low: "Low Risk",
+
+                slope_title: "⛰️ Spatial Analysis: Slope Map",
+                slope_desc: "The Slope Map visualizes terrain steepness in Ipoh derived from the Digital Elevation Model (DEM). Slope parameters are crucial in determining surface runoff velocity and water accumulation potential.",
+                slope_zone_title: "📌 Zonation & Hydrological Impact:",
+                slope_flat: "Flat (0° - 2°):",
+                slope_flat_desc: "Very low runoff velocity, leading to high runoff accumulation and prime flood pooling zones.",
+                slope_moderate: "Moderate (2° - 15°):",
+                slope_mod_desc: "Runoff transition zone with stable surface flow speed.",
+                slope_steep: "Steep (> 15°):",
+                slope_steep_desc: "Promotes rapid surface water flow toward lowlands and increases slope failure/landslide risks during heavy rain.",
+                slope_app: "💡 <strong>Geospatial Application:</strong> Used alongside hydrological parameters in Multi-Criteria Decision Analysis (MCDA) for flash flood risk mapping.",
+
+                elev_title: "🏔️ Spatial Analysis: Elevation Map",
+                elev_desc: "The Elevation Map illustrates absolute land height variations across Ipoh. Elevation is critical as water moves by gravity from higher elevations to the lowest areas.",
+                elev_zone_title: "📌 Elevation Zonation:",
+                elev_low: "Low Elevation (< 20m):",
+                elev_low_desc: "Most critical risk zones frequently experiencing river overflows and monsoon flood pooling.",
+                elev_mod: "Moderate Elevation (20m - 100m):",
+                elev_mod_desc: "Hilly lowland zones with localized flood risks based on drainage capacity.",
+                elev_high: "High Elevation (> 100m):",
+                elev_high_desc: "Upland and limestone hill zones serving as primary water catchment areas.",
+                elev_app: "💡 <strong>Geospatial Application:</strong> Informs water level rise simulations and emergency evacuation routing.",
+
+                bound_title: "🗺️ Spatial Analysis: Boundary Map",
+                bound_desc: "The Boundary Map displays administrative district divisions, sub-districts, and urban planning zones in Ipoh, integrating vector boundary data for structured risk mapping.",
+                bound_importance_title: "📌 Importance of Boundary Data:",
+                bound_admin: "Administrative Boundaries:",
+                bound_admin_desc: "Assists local authorities and Ipoh City Council (MBI) in disaster zone management.",
+                bound_pop: "Population Density Zones:",
+                bound_pop_desc: "Calibrates exposure levels for settlements like Gugusan Manjoi and Buntong.",
+                bound_basin: "River Basin Zones:",
+                bound_basin_desc: "Facilitates flood mitigation alignment along hydrological river basin boundaries.",
+                bound_app: "💡 <strong>Geospatial Application:</strong> Essential for urban land-use planning and temporary evacuation center (PPS) resource allocation.",
+
+                landuse_title: "🌾 Spatial Analysis: Land Use / Land Cover (LULC) Map",
+                landuse_desc: "The Land Use Map illustrates the distribution of urban areas, vegetation, water bodies, and bare land across Ipoh. It identifies impervious surfaces that significantly influence surface runoff rates.",
+                landuse_impact_title: "📌 Hydrological & Urban Impact:",
+                landuse_urban: "Urban / Built-up:",
+                landuse_urban_desc: "High imperviousness leading to rapid peak stormwater discharge.",
+                landuse_veg: "Vegetation / Forest:",
+                landuse_veg_desc: "Promotes higher infiltration capacity and lower surface runoff.",
+                landuse_water: "Water Bodies:",
+                landuse_water_desc: "Natural drainage paths and flood retention zones.",
+                landuse_app: "💡 <strong>Geospatial Application:</strong> Utilized in Multi-Criteria Decision Analysis (MCDA) to evaluate surface vulnerability against heavy rainfall.",
+
+                tab_map1: "Flood Risk Map ⚠️",
+                tab_map2: "Slope Map ⛰️",
+                tab_map4: "Elevation Map 🏔️",
+                tab_map5: "Boundary Map 🗺️",
+                tab_map6: "Land Use Map 🌾",
+
+                title_analytics_section: "Rainfall Analytics & Hazard Location Grid",
+                tab_rain_analytics: "📊 Dynamic Rainfall Analytics",
+                tab_loc_grid: "📍 Location Grid & Spatial Coordinates",
+                chart_title: "Monthly Rainfall Distribution (mm)",
+                table_monsoon_title: "Monsoon Season Phases",
+                th_month: "Month",
+                th_rainfall: "Rainfall (mm)",
+                th_level: "Level",
+                table_hazard_title: "Registered Hazard Location Data",
+                th_area: "Area",
+                th_hazard: "Hazard Level",
+                btn_dl_rain: "📥 Download Rainfall Data (CSV)",
+                btn_dl_loc: "📥 Download Hazard Location Data (CSV)",
+
+                params_title: "📐 GIS Spatial Analysis Parameters & Analytical Methodology",
+                params_intro: "This flood risk mapping system employs a Multi-Criteria Decision Analysis (MCDA) approach combined with multi-tier geospatial data processing within a GIS environment to identify vulnerability levels and potential flood inundation zones around the Ipoh district.",
+                param1_title: "⛰️ Digital Elevation Model (DEM) & Topography",
+                param1_desc: "Shuttle Radar Topography Mission (SRTM) DEM data extraction is refined to produce elevation and slope layers. This parameter assesses terrain steepness, identifying lowlands (< 20m) and gentle slopes (0° - 2°) as primary runoff accumulation zones with high flood risk.",
+                param1_app: "Application: Gravity-driven flow modeling and identification of water retention catchment zones.",
+                param2_title: "🌧️ Hydrological Network & River Proximity",
+                param2_desc: "Hydrological modeling involves Euclidean Distance Buffer analysis on major water systems such as Kinta River and Pari River. Assessments are integrated with monthly and monsoon rainfall designs to measure bank overflow rates when water volume exceeds maximum basin capacity.",
+                param2_app: "Application: Analysis of river overflow risk buffer zones and runoff velocity rates.",
+                param3_title: "🏢 Land Use / Land Cover (LULC) & Impervious Surfaces",
+                param3_desc: "Land use classification maps urbanization levels, impervious surface coverage, and high-density settlements. Land use changes reduce water infiltration capacity and increase surface runoff coefficients, directly boosting urban flash flood frequency.",
+                param3_app: "Application: Assessing asset/community exposure and urban drainage system efficiency.",
+
+                title_team: "Project Team",
+                role_lead: "Project Lead / WebGIS Developer",
+                role_analyst: "GIS Spatial Analyst",
+                role_manager: "DEM & Hydrology Data Manager",
+                footer_text: "© 2026 WebGIS Flood Risk Mapping System. All Rights Reserved."
+            }
+        };
+
+        let currentLang = "ms";
+
+        function changeLanguage(lang) {
+            if (!translations[lang]) return;
+            currentLang = lang;
+
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang][key]) {
+                    el.innerHTML = translations[lang][key];
+                }
+            });
+
+            updateDashboard();
+        }
+
+        const baseClimateData = [
+            { Bulan: "January", Hujan_mm: 192.0, Hari_Hujan: 12, Fasa_Monsun: "Northeast Monsoon (Late)", Tahap: "Moderate" },
+            { Bulan: "February", Hujan_mm: 171.0, Hari_Hujan: 11, Fasa_Monsun: "Inter-monsoon (Dry)", Tahap: "Moderate" },
+            { Bulan: "March", Hujan_mm: 234.0, Hari_Hujan: 13, Fasa_Monsun: "First Inter-monsoon Transition", Tahap: "High" },
+            { Bulan: "April", Hujan_mm: 277.0, Hari_Hujan: 17, Fasa_Monsun: "Peak First Transition", Tahap: "Very High" },
+            { Bulan: "May", Hujan_mm: 205.0, Hari_Hujan: 16, Fasa_Monsun: "Southwest Monsoon (Early)", Tahap: "High" },
+            { Bulan: "June", Hujan_mm: 111.0, Hari_Hujan: 13, Fasa_Monsun: "Southwest Monsoon (Dry)", Tahap: "Moderate" },
+            { Bulan: "July", Hujan_mm: 110.0, Hari_Hujan: 14, Fasa_Monsun: "Southwest Monsoon", Tahap: "Moderate" },
+            { Bulan: "August", Hujan_mm: 133.0, Hari_Hujan: 16, Fasa_Monsun: "Southwest Monsoon", Tahap: "Moderate" },
+            { Bulan: "September", Hujan_mm: 196.0, Hari_Hujan: 20, Fasa_Monsun: "Second Inter-monsoon Transition", Tahap: "High" },
+            { Bulan: "October", Hujan_mm: 275.0, Hari_Hujan: 23, Fasa_Monsun: "Peak Wet Season", Tahap: "Very High" },
+            { Bulan: "November", Hujan_mm: 338.0, Hari_Hujan: 23, Fasa_Monsun: "Northeast Monsoon Peak", Tahap: "Very High" },
+            { Bulan: "December", Hujan_mm: 267.0, Hari_Hujan: 19, Fasa_Monsun: "Northeast Monsoon", Tahap: "Very High" }
+        ];
+
+        const yearFactors = {
+            2016: 1.05, 2017: 0.98, 2018: 1.02, 2019: 0.95,
+            2020: 1.08, 2021: 1.12, 2022: 1.04, 2023: 0.97,
+            2024: 1.03, 2025: 1.01, 2026: 1.00
+        };
+
+        const rainfallHistory = {};
+        Object.keys(yearFactors).forEach(year => {
+            const factor = yearFactors[year];
+            rainfallHistory[year] = baseClimateData.map(d => {
+                const mm = Math.round(d.Hujan_mm * factor * 10) / 10;
+                let tahap = d.Tahap;
+                if (mm > 250) tahap = "Very High";
+                else if (mm > 180) tahap = "High";
+                else tahap = "Moderate";
+
+                return {
+                    Bulan: d.Bulan,
+                    Hujan_mm: mm,
+                    Hari_Hujan: Math.min(31, Math.round(d.Hari_Hujan * (factor > 1 ? 1.05 : 0.95))),
+                    Fasa_Monsun: d.Fasa_Monsun,
+                    Tahap: tahap
+                };
+            });
+        });
+
+        const locationsData = [
+            { kawasan: "Kampung Tengku Hussien", lat: 4.612139, lon: 101.066833, easting: 729294, northing: 510123, hazard_class: "high risk" },
+            { kawasan: "Kampung Seri Kinta", lat: 4.565389, lon: 101.064389, easting: 729026, northing: 504953, hazard_class: "high risk" },
+            { kawasan: "Kampung Tasek Seberang", lat: 4.637500, lon: 101.111806, easting: 734283, northing: 512942, hazard_class: "high risk" },
+            { kawasan: "Gugusan Manjoi", lat: 4.637500, lon: 101.111806, easting: 734283, northing: 512942, hazard_class: "high risk" },
+            { kawasan: "Taman Chempaka", lat: 4.590472, lon: 101.133944, easting: 736750, northing: 507740, hazard_class: "risk" },
+            { kawasan: "Kampung Dato Ahmad Said", lat: 4.622944, lon: 101.075139, easting: 730217, northing: 511317, hazard_class: "risk" },
+            { kawasan: "Sungai Rokam", lat: 4.578806, lon: 101.112472, easting: 734365, northing: 506453, hazard_class: "risk" },
+            { kawasan: "Jalan Sungai Pari", lat: 4.591306, lon: 101.059944, easting: 728532, northing: 507819, hazard_class: "moderate risk" },
+            { kawasan: "PLUS Highway (KM 271.8)", lat: 4.642194, lon: 101.087806, easting: 731623, northing: 513446, hazard_class: "moderate risk" },
+            { kawasan: "Padang Polo", lat: 4.595944, lon: 101.110750, easting: 734175, northing: 508348, hazard_class: "moderate risk" },
+            { kawasan: "City Centre (Greentown)", lat: 4.597944, lon: 101.092333, easting: 732129, northing: 508561, hazard_class: "low risk" },
+            { kawasan: "Bercham", lat: 4.644528, lon: 101.129194, easting: 736217, northing: 513722, hazard_class: "low risk" },
+            { kawasan: "Bandar Seri Botani", lat: 4.527861, lon: 101.105194, easting: 733568, northing: 500818, hazard_class: "low risk" },
+            { kawasan: "Sunway City Ipoh", lat: 4.623306, lon: 101.152861, easting: 738848, northing: 511382, hazard_class: "low risk" }
+        ];
+
+        let map, markersGroup, chartInstance;
+
+        window.onload = function () {
+            initYearSelect();
+            initMonthSelect();
+            initMap();
+            initChart();
+            fetchLiveWeather();
+            updateDashboard();
+        };
+
+        function initYearSelect() {
+            const select = document.getElementById("yearSelect");
+            select.innerHTML = "";
+            for (let y = 2026; y >= 2016; y--) {
+                const opt = document.createElement("option");
+                opt.value = y;
+                opt.textContent = y;
+                if (y === 2026) opt.selected = true;
+                select.appendChild(opt);
+            }
+        }
+
+        function initMonthSelect() {
+            const select = document.getElementById("monthSelect");
+            select.innerHTML = "";
+            baseClimateData.forEach((d, idx) => {
+                const opt = document.createElement("option");
+                opt.value = d.Bulan;
+                opt.textContent = d.Bulan;
+                if (idx === 10) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function initMap() {
+            map = L.map('map').setView([4.5975, 101.0901], 11);
+
+            const osmStandard = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            });
+
+            const satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Satellite'
+            });
+
+            osmStandard.addTo(map);
+
+            const baseMaps = {
+                "🗺️ OpenStreetMap": osmStandard,
+                "🛰️ Sifat Satelit": satellite
+            };
+
+            L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+            markersGroup = L.layerGroup().addTo(map);
+
+            const ppsMarker = L.marker([4.610111, 101.101694]).addTo(map);
+            ppsMarker.bindPopup("<b>📍 Pusat Pemindahan Sementara (PPS)</b><br>Stadium Tertutup Indera Mulia Ipoh");
+        }
+
+        function getColor(hazard) {
+            const text = (hazard || "").toLowerCase();
+            if (text.includes("high")) return "#ff4d6d";
+            if (text.includes("low")) return "#06d6a0";
+            if (text.includes("moderate")) return "#48cae4";
+            if (text === "risk" || text.includes("risk")) return "#ffb703";
+            return "#cbd5e1";
+        }
+
+        function updateDashboard() {
+            const selectedYear = document.getElementById("yearSelect").value || "2026";
+            const selectedMonthName = document.getElementById("monthSelect").value;
+            const searchKeyword = (document.getElementById("searchInput") ? document.getElementById("searchInput").value : "").toLowerCase().trim();
+            const currentYearData = rainfallHistory[selectedYear] || rainfallHistory["2026"];
+            
+            const monthInfo = currentYearData.find(d => d.Bulan === selectedMonthName) || currentYearData[0];
+
+            let labelRain = currentLang === 'ms' ? "Purata Hujan" : "Avg Rainfall";
+            let daysText = currentLang === 'ms' ? "Hari" : "Days";
+
+            document.getElementById("lblSelectedMonth").textContent = `${labelRain} (${monthInfo.Bulan} ${selectedYear})`;
+            document.getElementById("valRainfall").textContent = `${monthInfo.Hujan_mm} mm`;
+            document.getElementById("subRainfall").textContent = `${currentLang === 'ms' ? 'Kadar' : 'Intensity'}: ${monthInfo.Tahap}`;
+            document.getElementById("valRainDays").textContent = `${monthInfo.Hari_Hujan} ${daysText}`;
+            document.getElementById("subMonsoon").textContent = monthInfo.Fasa_Monsun.split('(')[0];
+
+            const alertVal = document.getElementById("valAlertStatus");
+            const alertSub = document.getElementById("subAlertDesc");
+            if (monthInfo.Hujan_mm >= 270) {
+                alertVal.textContent = currentLang === 'ms' ? "KRITIKAL / PARAH" : "CRITICAL / SEVERE";
+                alertVal.className = "value text-red-500 font-bold";
+                alertSub.textContent = currentLang === 'ms' ? "Risiko Tinggi Banjir Kilat" : "High Risk of Flash Floods";
+            } else if (monthInfo.Hujan_mm >= 190) {
+                alertVal.textContent = currentLang === 'ms' ? "AMARAN" : "WARNING";
+                alertVal.className = "value text-amber-400 font-bold";
+                alertSub.textContent = currentLang === 'ms' ? "Fasa Transisi Monsun" : "Monsoon Transition Period";
+            } else {
+                alertVal.textContent = currentLang === 'ms' ? "SEDERHANA / SELAMAT" : "MODERATE / SAFE";
+                alertVal.className = "value text-emerald-400 font-bold";
+                alertSub.textContent = currentLang === 'ms' ? "Kesiapsiagaan Normal" : "Normal Preparedness";
+            }
+
+            document.getElementById("chartYearTitle").textContent = selectedYear;
+
+            const checkedRisks = Array.from(document.querySelectorAll('.risk-checkbox:checked')).map(cb => cb.value.toLowerCase());
+            
+            const filteredLocs = locationsData.filter(loc => {
+                const matchesRisk = checkedRisks.includes(loc.hazard_class.toLowerCase());
+                const matchesSearch = loc.kawasan.toLowerCase().includes(searchKeyword);
+                return matchesRisk && matchesSearch;
+            });
+
+            document.getElementById("valActiveLocs").textContent = `${filteredLocs.length} / ${locationsData.length}`;
+
+            markersGroup.clearLayers();
+            filteredLocs.forEach(loc => {
+                const color = getColor(loc.hazard_class);
+                
+                const marker = L.circleMarker([loc.lat, loc.lon], {
+                    radius: 9,
+                    fillColor: color,
+                    color: "#ffffff",
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.95
+                });
+
+                const popupContent = `
+                    <div style="font-family: sans-serif; width: 180px; color: #0b132b;">
+                        <h4 style="margin:0 0 6px 0; font-weight:700; font-size: 14px;">${loc.kawasan}</h4>
+                        <span style="background-color:${color}; color:white; padding:2px 6px; border-radius:10px; font-weight:600; font-size:10px; text-transform:uppercase;">
+                            ${loc.hazard_class}
+                        </span>
+                        <div style="font-size: 11px; margin-top:8px; line-height:1.4; color:#1c2541;">
+                            <b>Grid:</b> E ${loc.easting} | N ${loc.northing}<br>
+                            <b>Lat, Lon:</b> ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}<br>
+                            <hr style="margin: 6px 0; border: 0; border-top: 1px solid #ccc;">
+                            <i>${currentLang === 'ms' ? 'Purata Hujan' : 'Avg Rainfall'} (${monthInfo.Bulan} ${selectedYear}): <b>${monthInfo.Hujan_mm} mm</b></i>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                marker.bindTooltip(`${loc.kawasan} [${loc.hazard_class.toUpperCase()}]`);
+                markersGroup.addLayer(marker);
+            });
+
+            if (searchKeyword.length > 0 && filteredLocs.length > 0) {
+                if (filteredLocs.length === 1) {
+                    map.setView([filteredLocs[0].lat, filteredLocs[0].lon], 15, {
+                        animate: true,
+                        duration: 1.0
+                    });
+                    markersGroup.eachLayer(layer => {
+                        if (layer.getLatLng && layer.getLatLng().lat === filteredLocs[0].lat) {
+                            layer.openPopup();
+                        }
+                    });
+                } else {
+                    const bounds = L.latLngBounds(filteredLocs.map(loc => [loc.lat, loc.lon]));
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+                }
+            } else if (searchKeyword.length === 0) {
+                map.setView([4.5975, 101.0901], 11);
+            }
+
+            updateChart(currentYearData);
+            populateTables(currentYearData);
+            populateLocationTable(filteredLocs);
+        }
+
+        function autoFitIframeMap(iframe) {
+            if (!iframe) return;
+            iframe.src = iframe.src;
+            iframe.onload = function() {
+                setTimeout(() => {
+                    try {
+                        const iframeWin = iframe.contentWindow;
+                        if (iframeWin && iframeWin.map) {
+                            const innerMap = iframeWin.map;
+                            innerMap.invalidateSize();
+                            const bounds = L.latLngBounds();
+                            let hasValidBounds = false;
+
+                            innerMap.eachLayer((layer) => {
+                                if (typeof layer.getBounds === 'function') {
+                                    const layerBounds = layer.getBounds();
+                                    if (layerBounds && layerBounds.isValid()) {
+                                        bounds.extend(layerBounds);
+                                        hasValidBounds = true;
+                                    }
+                                }
+                            });
+
+                            if (hasValidBounds) {
+                                innerMap.fitBounds(bounds, { padding: [20, 20] });
+                            }
+                        }
+                    } catch (e) {
+                        console.log("Auto-fit iframe map executed");
+                    }
+                }, 200);
+            };
+        }
+
+        function switchMapTab(mapType) {
+            const map1 = document.getElementById('map-container-1');
+            const map2 = document.getElementById('map-container-2');
+            const map4 = document.getElementById('map-container-4');
+            const map5 = document.getElementById('map-container-5');
+            const map6 = document.getElementById('map-container-6');
+            
+            const btn1 = document.getElementById('btnMap1');
+            const btn2 = document.getElementById('btnMap2');
+            const btn4 = document.getElementById('btnMap4');
+            const btn5 = document.getElementById('btnMap5');
+            const btn6 = document.getElementById('btnMap6');
+
+            const iframeSlope = document.getElementById('qgisIframeSlope');
+            const iframeElevation = document.getElementById('qgisIframeElevation');
+            const iframeBoundary = document.getElementById('qgisIframeBoundary');
+            const iframeLanduse = document.getElementById('qgisIframeLanduse');
+
+            const pControls = document.getElementById('panel-controls');
+            const pSlope = document.getElementById('panel-desc-slope');
+            const pElevation = document.getElementById('panel-desc-elevation');
+            const pBoundary = document.getElementById('panel-desc-boundary');
+            const pLanduse = document.getElementById('panel-desc-landuse');
+
+            map1.classList.add('hidden');
+            map2.classList.add('hidden');
+            map4.classList.add('hidden');
+            map5.classList.add('hidden');
+            map6.classList.add('hidden');
+
+            pControls.classList.add('hidden');
+            pSlope.classList.add('hidden');
+            pElevation.classList.add('hidden');
+            pBoundary.classList.add('hidden');
+            pLanduse.classList.add('hidden');
+
+            const inactiveBtn = "px-4 py-1.5 text-xs font-semibold rounded bg-[#0b132b] text-gray-300 hover:text-white whitespace-nowrap";
+            const activeBtn = "px-4 py-1.5 text-xs font-semibold rounded bg-cyan-500 text-white whitespace-nowrap";
+
+            btn1.className = inactiveBtn;
+            btn2.className = inactiveBtn;
+            btn4.className = inactiveBtn;
+            btn5.className = inactiveBtn;
+            btn6.className = inactiveBtn;
+
+            if (mapType === 'map1') {
+                map1.classList.remove('hidden');
+                pControls.classList.remove('hidden');
+                btn1.className = activeBtn;
+                setTimeout(() => { 
+                    if (typeof map !== 'undefined') map.invalidateSize(); 
+                }, 100);
+            } else if (mapType === 'map2') {
+                map2.classList.remove('hidden');
+                pSlope.classList.remove('hidden');
+                btn2.className = activeBtn;
+                autoFitIframeMap(iframeSlope);
+            } else if (mapType === 'map4') {
+                map4.classList.remove('hidden');
+                pElevation.classList.remove('hidden');
+                btn4.className = activeBtn;
+                autoFitIframeMap(iframeElevation);
+            } else if (mapType === 'map5') {
+                map5.classList.remove('hidden');
+                pBoundary.classList.remove('hidden');
+                btn5.className = activeBtn;
+                autoFitIframeMap(iframeBoundary);
+            } else if (mapType === 'map6') {
+                map6.classList.remove('hidden');
+                pLanduse.classList.remove('hidden');
+                btn6.className = activeBtn;
+                autoFitIframeMap(iframeLanduse);
+            }
+        }
+
+        function switchTab(tabId) {
+            const tab1 = document.getElementById('tab1');
+            const tab2 = document.getElementById('tab2');
+            const btn1 = document.getElementById('btnTab1');
+            const btn2 = document.getElementById('btnTab2');
+
+            if (tabId === 'tab1') {
+                tab1.classList.remove('hidden');
+                tab2.classList.add('hidden');
+                btn1.classList.add('active');
+                btn2.classList.remove('active');
+            } else {
+                tab1.classList.add('hidden');
+                tab2.classList.remove('hidden');
+                btn1.classList.remove('active');
+                btn2.classList.add('active');
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('rainfallChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: baseClimateData.map(d => d.Bulan),
+                    datasets: [{
+                        label: 'Purata Hujan (mm)',
+                        data: baseClimateData.map(d => d.Hujan_mm),
+                        backgroundColor: 'rgba(72, 202, 228, 0.6)',
+                        borderColor: '#48cae4',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#cbd5e1', font: { size: 10 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#cbd5e1', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(data) {
+            if (chartInstance) {
+                chartInstance.data.datasets[0].data = data.map(d => d.Hujan_mm);
+                chartInstance.update();
+            }
+        }
+
+        function populateTables(data) {
+            const seasonBody = document.getElementById("seasonTableBody");
+            seasonBody.innerHTML = "";
+            data.forEach(d => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="py-2">${d.Bulan}</td>
+                    <td class="py-2">${d.Hujan_mm} mm</td>
+                    <td class="py-2"><span class="px-2 py-0.5 rounded text-[10px] ${d.Tahap === 'Very High' ? 'bg-rose-500/20 text-rose-300' : d.Tahap === 'High' ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/20 text-cyan-300'}">${d.Tahap}</span></td>
+                `;
+                seasonBody.appendChild(tr);
+            });
+        }
+
+        function populateLocationTable(locations) {
+            const locBody = document.getElementById("locationTableBody");
+            locBody.innerHTML = "";
+            locations.forEach(loc => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="py-2.5 font-medium text-white">${loc.kawasan}</td>
+                    <td class="py-2.5"><span class="px-2 py-0.5 rounded text-[10px] uppercase font-semibold text-white" style="background-color:${getColor(loc.hazard_class)}">${loc.hazard_class}</span></td>
+                    <td class="py-2.5 font-mono text-gray-300">${loc.easting}</td>
+                    <td class="py-2.5 font-mono text-gray-300">${loc.northing}</td>
+                    <td class="py-2.5 font-mono text-gray-300">${loc.lat.toFixed(4)}</td>
+                    <td class="py-2.5 font-mono text-gray-300">${loc.lon.toFixed(4)}</td>
+                `;
+                locBody.appendChild(tr);
+            });
+        }
+
+        async function fetchLiveWeather() {
+            try {
+                const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=4.5975&longitude=101.0901&current_weather=true');
+                const data = await response.json();
+                if (data && data.current_weather) {
+                    const weather = data.current_weather;
+                    document.getElementById("weatherCondition").textContent = `${weather.temperature} °C`;
+                    document.getElementById("weatherSub").textContent = `${currentLang === 'ms' ? 'Kelajuan Angin' : 'Wind Speed'}: ${weather.windspeed} km/j`;
+                }
+            } catch (err) {
+                document.getElementById("weatherCondition").textContent = currentLang === 'ms' ? "Data Tidak Tersedia" : "Data Unavailable";
+            }
+        }
+
+        function downloadCSV(type) {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            const selectedYear = document.getElementById("yearSelect").value || "2026";
+            
+            if (type === 'rain') {
+                csvContent += `Year,Month,Rainfall_mm,Rainy_Days,Monsoon_Phase,Level\n`;
+                const currentData = rainfallHistory[selectedYear] || rainfallHistory["2026"];
+                currentData.forEach(r => {
+                    csvContent += `${selectedYear},"${r.Bulan}",${r.Hujan_mm},${r.Hari_Hujan},"${r.Fasa_Monsun}","${r.Tahap}"\n`;
+                });
+            } else {
+                csvContent += "Area,Hazard_Level,Easting,Northing,Latitude,Longitude\n";
+                locationsData.forEach(l => {
+                    csvContent += `"${l.kawasan}","${l.hazard_class}",${l.easting},${l.northing},${l.lat},${l.lon}\n`;
+                });
+            }
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `${type}_data_ipoh_${selectedYear}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        var legend = L.control({position: 'bottomright'});
+
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'info legend');
+            div.style.backgroundColor = 'rgba(11, 19, 43, 0.85)';
+            div.style.color = '#fff';
+                        div.style.fontSize = '12px';
+            div.style.border = '1px solid #3a506b';
+
+            div.innerHTML = `
+                <b style="color:#48cae4;">Kecerunan (Darjah)</b><br>
+                <i style="background:#2b83ba; width:12px; height:12px; display:inline-block; margin-right:5px;"></i> 0° - 2° (Pamah/Landai)<br>
+                <i style="background:#abdda4; width:12px; height:12px; display:inline-block; margin-right:5px;"></i> 2° - 5° (Rata Ringan)<br>
+                <i style="background:#ffffbf; width:12px; height:12px; display:inline-block; margin-right:5px;"></i> 5° - 15° (Sederhana)<br>
+                <i style="background:#fdae61; width:12px; height:12px; display:inline-block; margin-right:5px;"></i> 15° - 25° (Curam)<br>
+                <i style="background:#d7191c; width:12px; height:12px; display:inline-block; margin-right:5px;"></i> > 25° (Sangat Curam)
+            `;
+            return div;
+        };
+
+        legend.addTo(map);
+    </script>
+</body>
+</html>
